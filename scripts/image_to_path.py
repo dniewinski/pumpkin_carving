@@ -7,7 +7,7 @@ import rospy
 from PIL import Image
 import tf.transformations
 from geometry_msgs.msg import Pose, PoseArray, Point, Quaternion, Point32
-from sensor_msgs.msg import PointCloud
+from sensor_msgs.msg import PointCloud, ChannelFloat32
 
 def getImageData(im):
     lines = []
@@ -83,6 +83,8 @@ def getPoseArray(path_data):
 def getPointCloud(in_data):
     PC = PointCloud()
     PC.header.frame_id = "pumpkin"
+    intensity = ChannelFloat32()
+    intensity.name = "intensity"
     for line in in_data:
         for point in line:
             NP = Point32()
@@ -90,6 +92,9 @@ def getPointCloud(in_data):
             NP.y = point[1]
             NP.z = point[2]
             PC.points.append(NP)
+            intensity.values.append(math.sqrt(point[0]*point[0]+point[1]*point[1]+point[2]*point[2]))
+
+    PC.channels.append(intensity)
 
     return PC
 

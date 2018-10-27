@@ -23,12 +23,16 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   tf
   tf_conversions
+  message_generation
 )
+
+add_service_files(FILES cart_path.srv)
+generate_messages(DEPENDENCIES geometry_msgs)
 
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES pumpkin_carving
-  CATKIN_DEPENDS moveit_core moveit_ros_planning_interface
+  CATKIN_DEPENDS moveit_core moveit_ros_planning_interface message_runtime
   DEPENDS Eigen3
 )
 
@@ -46,3 +50,4 @@ link_directories(${catkin_LIBRARY_DIRS})
 
 add_executable(arm_mover src/arm_mover.cpp)
 target_link_libraries(arm_mover ${catkin_LIBRARIES} ${Boost_LIBRARIES})
+add_dependencies(arm_mover pumpkin_carving_generate_messages_cpp)

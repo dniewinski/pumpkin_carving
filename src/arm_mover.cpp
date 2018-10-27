@@ -4,6 +4,9 @@
 #include <tf_conversions/tf_eigen.h>
 #include <tf/transform_listener.h>
 #include <geometry_msgs/Pose.h>
+#include <geometry_msgs/Pose.h>
+#include "ros/ros.h"
+#include "pumpkin_carving/cart_path.h"
 
 Eigen::Affine3d uFrame;
 moveit::planning_interface::MoveGroupInterface *move_group;
@@ -39,7 +42,7 @@ bool follow_path(pumpkin_carving::cart_path::Request &req, pumpkin_carving::cart
      ROS_INFO("Complete");
    }
 
-  ROS_INFO("Path Complete")
+  ROS_INFO("Path Complete");
   return true;
 }
 
@@ -89,6 +92,8 @@ int main(int argc, char** argv)
     }
   }
   ROS_INFO("World Initialized");
+
+  ros::ServiceServer service = node_handle.advertiseService("follow_path", follow_path);
 
   ros::spin();
   return 0;

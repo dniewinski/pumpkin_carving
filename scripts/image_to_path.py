@@ -6,7 +6,8 @@ import math
 import rospy
 from PIL import Image
 import tf.transformations
-from geometry_msgs.msg import Pose, PoseArray, Point, Quaternion
+from geometry_msgs.msg import Pose, PoseArray, Point, Quaternion, Point32
+from sensor_msgs.msg import PointCloud
 
 def getImageData(im):
     lines = []
@@ -28,7 +29,7 @@ def getPathPositions(im_depths, x_shift, y_shift, max_depth):
     for y in range(len(im_depths)):
         path_data.append([])
         for x in range(len(im_depths[y])):
-            path_data[y].append((x - x_shift, y - y_shift, im_depths[y][x] * max_depth))
+            path_data[y].append((x * 0.001 - x_shift, y * 0.001 - y_shift, im_depths[y][x] * max_depth))
 
     return path_data
 
@@ -79,20 +80,37 @@ def getPoseArray(path_data):
 
     return PA
 
+def getPointCloud(in_data):
+    PC = PointCloud()
+    PC.header.frame_id = "pumpkin"
+    for line in in_data:
+        for point in line:
+            NP = Point32()
+            NP.x = point[0]
+            NP.y = point[1]
+            NP.z = point[2]
+            PC.points.append(NP)
+
+    return PC
+
 def main():
     rospy.init_node('image_pather', anonymous=True)
     pub = rospy.Publisher('cut_path', PoseArray, queue_size=10)
+    flat_pub = rospy.Publisher('flat_points', PointCloud, queue_size=10)
+    sphere_pub = rospy.Publisher('sphere_points', PointCloud, queue_size=10)
 
     image_file = rospy.get_param('~image_file', "/home/dniewinski/Desktop/HuskySmall.png")
-    max_depth = rospy.get_param('~max_depth', 10.0)
-    radius = rospy.get_param('~radius', 300.0)
+    max_depth = rospy.get_param('~max_depth', 0.01)
+    radius = rospy.get_param('~radius', 0.3)
 
     rospy.loginfo("Reading " + image_file)
     im = Image.open(image_file)
     rospy.loginfo("Read Image <" + str(im.width) + "," + str(im.height) + ">")
     im_depths = getImageData(im)
-    path_data = getPathPositions(im_depths, im.width/2.0, im.height/2.0, max_depth)
+    path_data = getPathPositions(im_depths, im.width/2.0*0.001, im.height/2.0*0.001, max_depth)
     sphere_data = getSphericalPathPositions(path_data, radius)
+    path_pc = getPointCloud(path_data)
+    sphere_pc = getPointCloud(sphere_data)
 
     row_num = 0
     for row in sphere_data:
@@ -105,6 +123,12 @@ def main():
         PA = getPoseArray(row)
         pub.publish(PA)
         row_num = row_num + 1
+
+    rate = rospy.Rate(1)
+    while not rospy.is_shutdown():
+        flat_pub.publish(path_pc)
+        sphere_pub.publish(sphere_pc)
+        rate.sleep()
 
 if __name__ == '__main__':
     try:

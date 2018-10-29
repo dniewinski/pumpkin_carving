@@ -8,6 +8,7 @@ from PIL import Image
 import tf.transformations
 from geometry_msgs.msg import Pose, PoseArray, Point, Quaternion, Point32
 from sensor_msgs.msg import PointCloud, ChannelFloat32
+from pumpkin_carving.srv import cart_path
 
 def getImageData(im):
     lines = []
@@ -106,7 +107,7 @@ def main():
 
     image_file = rospy.get_param('~image_file', "/home/dniewinski/Desktop/HuskySmall.png")
     max_depth = rospy.get_param('~max_depth', 0.01)
-    radius = rospy.get_param('~radius', 0.3)
+    radius = rospy.get_param('~radius', 0.2)
 
     rospy.loginfo("Reading " + image_file)
     im = Image.open(image_file)
@@ -117,23 +118,34 @@ def main():
     path_pc = getPointCloud(path_data)
     sphere_pc = getPointCloud(sphere_data)
 
+    rospy.loginfo("Waiting for service")
+    follow_path = rospy.ServiceProxy('/arm_mover/follow_path', cart_path)
+    rospy.wait_for_service('/arm_mover/follow_path')
+
     row_num = 0
     for row in sphere_data:
+        flat_pub.publish(path_pc)
+        sphere_pub.publish(sphere_pc)
+
         if row_num % 2 == 0:
             rospy.loginfo("Sending row " + str(row_num) + " >>>>>")
         else:
             rospy.loginfo("Sending row " + str(row_num) + " <<<<<")
             row.reverse()
 
-        PA = getPoseArray(row)
-        pub.publish(PA)
-        row_num = row_num + 1
+        while(True):
+            PA = getPoseArray(row)
+            pub.publish(PA)
+            follow_path = rospy.ServiceProxy('/arm_mover/follow_path', cart_path)
+            resp = follow_path(PA)
+            rospy.loginfo(resp)
 
-    rate = rospy.Rate(1)
-    while not rospy.is_shutdown():
-        flat_pub.publish(path_pc)
-        sphere_pub.publish(sphere_pc)
-        rate.sleep()
+            if(resp.status == 0):
+                break
+            else:
+                rospy.loginfo("RETRYING")
+
+        row_num = row_num + 1
 
 if __name__ == '__main__':
     try:

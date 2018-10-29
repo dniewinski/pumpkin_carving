@@ -12,20 +12,27 @@ Eigen::Affine3d uFrame;
 moveit::planning_interface::MoveGroupInterface *move_group;
 Eigen::Affine3d worldFrame;
 
+geometry_msgs::Pose calcUFramePose(const geometry_msgs::Pose &poseIn){
+  geometry_msgs::Pose shiftedPose;
+  Eigen::Affine3d pointMTX;
+  tf::poseMsgToEigen (poseIn, pointMTX);
+  Eigen::Affine3d worldInPlan = worldFrame * uFrame;
+  tf::poseEigenToMsg	(worldInPlan * pointMTX, shiftedPose);
+
+  return shiftedPose;
+}
+
 bool follow_path(pumpkin_carving::cart_path::Request &req, pumpkin_carving::cart_path::Response &res)
 {
   ROS_INFO("Received new path");
 
-  geometry_msgs::Pose start_pos = move_group->getCurrentPose().pose;
-
   std::vector<geometry_msgs::Pose> waypoints;
-  waypoints.push_back(start_pos);
 
   for (unsigned i=0; i < req.path.poses.size(); i++) {
-    waypoints.push_back(req.path.poses[i]);
+    waypoints.push_back(calcUFramePose(req.path.poses[i]));
   }
 
-  move_group->setMaxVelocityScalingFactor(0.1);
+  move_group->setMaxVelocityScalingFactor(0.5);
 
   moveit_msgs::RobotTrajectory trajectory;
   const double jump_threshold = 0.0;
@@ -33,16 +40,32 @@ bool follow_path(pumpkin_carving::cart_path::Request &req, pumpkin_carving::cart
   double fraction = move_group->computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory);
   ROS_INFO("Computed Pass <%.2f%%>", fraction * 100.0);
 
-  moveit::planning_interface::MoveGroupInterface::Plan cPlan;
-  cPlan.trajectory_ = trajectory;
+  if(fraction > 0.99)
+  {
+    moveit::planning_interface::MoveGroupInterface::Plan cPlan;
+    cPlan.trajectory_ = trajectory;
 
-  ROS_INFO("Moving");
+    ROS_INFO("Moving");
 
-  if(move_group->execute(cPlan) == moveit_msgs::MoveItErrorCodes::SUCCESS){
-     ROS_INFO("Complete");
-   }
+    if(move_group->execute(cPlan) == moveit_msgs::MoveItErrorCodes::SUCCESS){
+       ROS_INFO("Complete");
+     }
+     else{
+       res.status = -2;
+       ROS_WARN("Path Execution Failure");
+       return true;
+     }
 
-  ROS_INFO("Path Complete");
+    ROS_INFO("Path Complete");
+  }
+  else
+  {
+    res.status = -1;
+    ROS_WARN("Path Planning Incomplete");
+    return true;
+  }
+
+  res.status = 0;
   return true;
 }
 
@@ -55,10 +78,10 @@ int main(int argc, char** argv)
 
   /////////////////////////////////////////////////////////////
   geometry_msgs::Pose uPose;
-  uPose.position.x = 0.0;
+  uPose.position.x = -0.6;
   uPose.position.y = 0.0;
-  uPose.position.z = 0.0;
-  uPose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0.0, 0.0, 0.0);
+  uPose.position.z = 0.2;
+  uPose.orientation = tf::createQuaternionMsgFromRollPitchYaw(-1.5708, 0.0, 3.14159);
   tf::poseMsgToEigen (uPose, uFrame);
   /////////////////////////////////////////////////////////////
 
